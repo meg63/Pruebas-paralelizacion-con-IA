@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <omp.h>
 
+
 #define _(x,y) (x ? y[x-1] : 0)
 #define S(i)   (i[out] = i[a] + _(i,out))
 
