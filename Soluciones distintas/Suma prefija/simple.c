@@ -1,9 +1,10 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <omp.h>
 
 int main(void) {
-    // Definir las 3 cantidades de datos a probar
+    // Definir las 3 cantidades de datos a probar (igual que el secuencial)
     int sizes[] = {100000, 10000000, 100000000};
     int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
 
@@ -11,27 +12,27 @@ int main(void) {
         int n = sizes[s];
         printf("\nPrueba con N = %d\n", n);
 
-        // Asignación de memoria dinámica para soportar arreglos grandes
+        // Asignación de memoria dinámica en el Heap
         int *a = (int *)malloc(n * sizeof(int));
         int *out = (int *)malloc(n * sizeof(int));
         int *tmp = (int *)malloc(n * sizeof(int));
 
         if (a == NULL || out == NULL || tmp == NULL) {
             printf("Error asignando memoria para N = %d\n", n);
+            free(a);
+            free(out);
+            free(tmp);
             return 1;
         }
 
-        // Inicializar el arreglo con 1s para verificación rápida
+        // Inicializar el arreglo con 1s (igual que el secuencial)
         for (int i = 0; i < n; i++) {
             a[i] = 1;
         }
 
-        // Usamos omp_get_wtime() en lugar de clock() porque es más preciso en entornos multihilo
+        // Medir el tiempo de ejecución paralelo
         double start = omp_get_wtime();
 
-        // ---------------------------------------------------------
-        // NÚCLEO DEL ALGORITMO INTACTO
-        // ---------------------------------------------------------
         #pragma omp parallel for
         for (int i = 0; i < n; i++) {
             out[i] = a[i];
@@ -52,18 +53,16 @@ int main(void) {
                 out[i] = tmp[i];
             }
         }
-        // ---------------------------------------------------------
-        // FIN DEL NÚCLEO
-        // ---------------------------------------------------------
 
         double end = omp_get_wtime();
         double time_spent = end - start;
 
-        // Imprimir resultados
-        printf("Tiempo paralelo (OpenMP): %f segundos\n", time_spent);
-        printf("Verificacion: out[%d] = %d (Esperado: %d)\n", n - 1, out[n - 1], n);
+        // Imprimir resultados (igual que el secuencial)
+        printf("Tiempo paralelo: %f segundos\n", time_spent);
+        printf("Verificacion: out[%d] = %d (Esperado: %d)\n",
+               n - 1, out[n - 1], n);
 
-        // Liberar memoria para la siguiente iteración
+        // Liberar memoria
         free(a);
         free(out);
         free(tmp);

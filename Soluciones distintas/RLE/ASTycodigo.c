@@ -1,11 +1,10 @@
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stddef.h>
 #include <omp.h>
 
-// ---------------------------------------------------------
-// ALGORITMO INTACTO
-// ---------------------------------------------------------
 void _(char *s, char *o)
 {
     size_t n = 0;
@@ -36,11 +35,7 @@ void _(char *s, char *o)
     }
 
     /*
-     * Corresponde a la condición del for interior:
-     *
-     *     for(p=s; *p==*s; p++);
-     *
-     * Cada posición puede analizarse independientemente.
+     * Cada posición se analiza independientemente en paralelo.
      */
     #pragma omp parallel for
     for (size_t i = 0; i < n; i++) {
@@ -51,9 +46,7 @@ void _(char *s, char *o)
     }
 
     /*
-     * Asignación de identificadores de segmento.
-     * Esta operación mantiene el orden necesario para construir
-     * la salida.
+     * Asignación secuencial de identificadores de segmento.
      */
     size_t groups = 0;
 
@@ -94,8 +87,7 @@ void _(char *s, char *o)
     }
 
     /*
-     * Cada elemento de la salida tiene tamaño variable.
-     * Primero calculamos cuánto espacio necesita cada segmento.
+     * Calcula el tamaño necesario para cada segmento.
      */
     size_t *size = malloc(groups * sizeof(size_t));
 
@@ -131,8 +123,7 @@ void _(char *s, char *o)
     }
 
     /*
-     * Los hilos escriben en regiones distintas de o,
-     * por lo que no existe una condición de carrera.
+     * Los hilos escriben en regiones distintas de la salida.
      */
     #pragma omp parallel for
     for (size_t g = 0; g < groups; g++) {
@@ -153,66 +144,80 @@ void _(char *s, char *o)
     free(offset);
     free(size);
 }
-// ---------------------------------------------------------
 
-// Función auxiliar: Generará SIEMPRE la misma cadena gracias a la semilla fija
-char* generar_cadena_prueba(int longitud) {
+/*
+ * MISMA FUNCIÓN GENERADORA DEL CÓDIGO SECUENCIAL.
+ */
+char* generar_cadena_prueba(int longitud)
+{
     char *cadena = (char*)malloc((longitud + 1) * sizeof(char));
     if (!cadena) return NULL;
-    
+
     int i = 0;
+
     while (i < longitud) {
-        char c = 'a' + (rand() % 26); 
-        int repeticiones = 1 + (rand() % 20); 
-        
+        char c = 'a' + (rand() % 26);
+        int repeticiones = 1 + (rand() % 20);
+
         for (int j = 0; j < repeticiones && i < longitud; j++) {
             cadena[i++] = c;
         }
     }
+
     cadena[longitud] = '\0';
     return cadena;
 }
 
 int main()
 {
-    int sizes[] = {
-        100,         // Pequeña
-        10000000,    // Mediana (~10 MB)
-        200000000    // Grande (~200 MB)
-    };
+    /*
+     * MISMOS TAMAÑOS DE PRUEBA DEL CÓDIGO SECUENCIAL.
+     */
+    int sizes[] = { 100, 10000000, 200000000, 400000000 };
     int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
 
-    // Semilla fija para asegurar que los datos sean idénticos a las otras pruebas
+    /*
+     * MISMA SEMILLA PARA GENERAR LA ENTRADA.
+     */
     srand(42);
 
     for (int s_idx = 0; s_idx < num_sizes; s_idx++) {
         int len = sizes[s_idx];
+
         printf("\n--- Prueba con cadena de %d caracteres ---\n", len);
 
+        /*
+         * MISMA GENERACIÓN DE ENTRADA Y RESERVA DE SALIDA.
+         */
         char *t = generar_cadena_prueba(len);
         char *o = (char*)malloc((len * 3 + 1) * sizeof(char));
 
         if (!t || !o) {
-            printf("Error de memoria.\n");
+            free(t);
+            free(o);
             return 1;
         }
 
-        double start_time = omp_get_wtime();
-        
-        _(t, o);
-        
-        double end_time = omp_get_wtime();
-        double time_spent = end_time - start_time;
+        /*
+         * MISMA MÉTRICA DE TIEMPO QUE EL SECUENCIAL.
+         * Solo se mide la ejecución del algoritmo paralelo.
+         */
+        double start = omp_get_wtime();
 
+        _(t, o);
+
+        double end = omp_get_wtime();
+
+        /*
+         * MISMA PRESENTACIÓN DE RESULTADOS.
+         */
         if (len <= 100) {
-            printf("Entrada: %s\n", t);
-            printf("Salida:  %s\n", o);
+            printf("Entrada: %s\nSalida:  %s\n", t, o);
         } else {
-            // Mostramos un fragmento truncado para evitar imprimir millones de líneas
             printf("Salida truncada: %.30s ...\n", o);
         }
-        
-        printf("Tiempo paralelo (Prefix sum): %f segundos\n", time_spent);
+
+        printf("Tiempo Paralelo: %f segundos\n", end - start);
 
         free(t);
         free(o);

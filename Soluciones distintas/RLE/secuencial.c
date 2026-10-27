@@ -36,7 +36,7 @@ char* generar_cadena_prueba(int longitud) {
 }
 
 int main() {
-    int sizes[] = { 100, 10000000, 200000000 };
+    int sizes[] = { 100, 10000000, 200000000,400000000 };
     int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
 
     srand(42); // Semilla fija

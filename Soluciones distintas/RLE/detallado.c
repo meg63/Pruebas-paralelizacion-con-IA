@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <omp.h>
 
 void _(char *s, char *o)
@@ -12,9 +13,16 @@ void _(char *s, char *o)
     int *inicio = malloc(n * sizeof(int));
     int *longitud = malloc(n * sizeof(int));
 
-    if (!inicio || !longitud)
+    if (!inicio || !longitud) {
+        free(inicio);
+        free(longitud);
         return;
+    }
 
+    /*
+     * Cada posición se analiza de forma independiente.
+     * Se mantiene la solución paralela original.
+     */
     #pragma omp parallel for
     for (int i = 0; i < n; i++) {
         if (i == 0 || s[i] != s[i - 1]) {
@@ -31,51 +39,77 @@ void _(char *s, char *o)
         }
     }
 
+    /*
+     * La construcción de la salida se mantiene secuencial.
+     */
+    int out_index = 0;
+
     for (int i = 0; i < n; i++) {
-        if (inicio[i])
-            o += sprintf(o, "%c%ld", s[i], (long)i);
+        if (inicio[i]) {
+            out_index += sprintf(
+                o + out_index,
+                "%c%d",
+                s[i],
+                longitud[i]
+            );
+        }
     }
 
-    *o = '\0';
+    o[out_index] = '\0';
 
     free(inicio);
     free(longitud);
 }
 
-char* generar_cadena_prueba(int longitud) {
+char* generar_cadena_prueba(int longitud)
+{
     char *cadena = (char*)malloc((longitud + 1) * sizeof(char));
-    if (!cadena) return NULL;
-    
+
+    if (!cadena)
+        return NULL;
+
     int i = 0;
+
     while (i < longitud) {
-        char c = 'a' + (rand() % 26); 
-        int repeticiones = 1 + (rand() % 20); 
-        
-        for (int j = 0; j < repeticiones && i < longitud; j++) cadena[i++] = c;
+        char c = 'a' + (rand() % 26);
+        int repeticiones = 1 + (rand() % 20);
+
+        for (int j = 0; j < repeticiones && i < longitud; j++) {
+            cadena[i++] = c;
+        }
     }
+
     cadena[longitud] = '\0';
+
     return cadena;
 }
 
-int main() {
-    int sizes[] = { 100, 10000000, 200000000 };
+int main()
+{
+    int sizes[] = { 100, 10000000, 200000000, 400000000 };
     int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
 
-    srand(42); // Semilla fija
+    srand(42);
 
     for (int s_idx = 0; s_idx < num_sizes; s_idx++) {
         int len = sizes[s_idx];
+
         printf("\n--- Prueba con cadena de %d caracteres ---\n", len);
 
         char *t = generar_cadena_prueba(len);
-        char *o = (char*)malloc((len * 3 + 1) * sizeof(char));
+        char *o = (char*)malloc((len * 3LL + 1) * sizeof(char));
 
-        if (!t || !o) return 1;
+        if (!t || !o) {
+            free(t);
+            free(o);
+            fprintf(stderr, "Error al reservar memoria.\n");
+            return 1;
+        }
 
         double start = omp_get_wtime();
-        
+
         _(t, o);
-        
+
         double end = omp_get_wtime();
 
         if (len <= 100) {
@@ -83,10 +117,12 @@ int main() {
         } else {
             printf("Salida truncada: %.30s ...\n", o);
         }
-        printf("Tiempo Paralelo (Indices): %f segundos\n", end - start);
+
+        printf("Tiempo Paralelo: %f segundos\n", end - start);
 
         free(t);
         free(o);
     }
+
     return 0;
 }
