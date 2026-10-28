@@ -66,9 +66,9 @@ void liberar_cadenas(const char **a, int n) {
 
 int main(void) {
     int sizes[] = {
-        100,         // Pequeña
-        1000000,     // Mediana 
-        10000000     // Grande 
+        1000000,     // Pequeña
+        10000000,     // Mediana 
+        100000000,    //Grande
     };
     int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
 

@@ -1,101 +1,118 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <omp.h>
 
-// ---------------------------------------------------------
-// ALGORITMO PARALELO INTACTO (Variante bits y ternario)
-// ---------------------------------------------------------
-typedef struct{const char*s;int v,c;}R;
-#define V(k) (1<<((*k|32)-'a')&0x104111)
+typedef struct {
+    const char *s;
+    int v, c;
+} R;
 
-void procesar_cadenas_paralelo_bits(const char *a[], int n, R r[]) {
-    #pragma omp parallel for
-    for(int i=0;i<n;i++){
-        r[i].s=a[i];
-        r[i].v=r[i].c=0;
+#define V(k) (1 << ((*k | 32) - 'a') & 0x104111)
 
-        for(const char *p=a[i];*p;p++)
-            isalpha(*p)?V(p)?r[i].v++:r[i].c++:0;
-    }
-}
-// ---------------------------------------------------------
-
-// Función auxiliar para generar un arreglo de cadenas aleatorias
+// Generar cadenas aleatorias, igual que en el secuencial
 const char** generar_cadenas_prueba(int n) {
     const char **a = (const char **)malloc(n * sizeof(char*));
     if (!a) return NULL;
-    
+
     for (int i = 0; i < n; i++) {
-        int len = 5 + (rand() % 10); // Cadenas de entre 5 y 14 caracteres
+        int len = 5 + (rand() % 10);
         char *str = (char *)malloc((len + 1) * sizeof(char));
-        
+
+        if (!str) {
+            for (int j = 0; j < i; j++)
+                free((void*)a[j]);
+            free(a);
+            return NULL;
+        }
+
         for (int j = 0; j < len; j++) {
             int mayuscula = rand() % 2;
-            str[j] = mayuscula ? 'A' + (rand() % 26) : 'a' + (rand() % 26);
+            str[j] = mayuscula
+                ? 'A' + (rand() % 26)
+                : 'a' + (rand() % 26);
         }
+
         str[len] = '\0';
         a[i] = str;
     }
+
     return a;
 }
 
-// Función auxiliar para liberar la memoria de las cadenas
+// Liberar las cadenas generadas
 void liberar_cadenas(const char **a, int n) {
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++)
         free((void*)a[i]);
-    }
+
     free(a);
 }
 
 int main(void) {
     int sizes[] = {
-        100,         // Pequeña
-        1000000,     // Mediana (~20 MB)
-        10000000     // Grande (~200 MB)
+        1000000,      // Pequeña
+        10000000,     // Mediana
+        100000000     // Grande
     };
+
     int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
 
-    // Semilla fija para que todas las pruebas futuras procesen exactamente las mismas palabras
+    // Misma semilla que el código secuencial
     srand(42);
 
     for (int s_idx = 0; s_idx < num_sizes; s_idx++) {
         int n = sizes[s_idx];
+
         printf("\n--- Prueba con arreglo de %d cadenas ---\n", n);
 
         const char **a = generar_cadenas_prueba(n);
-        // Usar malloc para evitar Stack Overflow con arreglos grandes
         R *r = (R *)malloc(n * sizeof(R));
 
         if (!a || !r) {
             printf("Error de memoria.\n");
+            if (a)
+                liberar_cadenas(a, n);
+            free(r);
             return 1;
         }
 
-        // Medición de tiempo de procesamiento
+        // Medición del tiempo de procesamiento paralelo
         double start = omp_get_wtime();
-        
-        procesar_cadenas_paralelo_bits(a, n, r);
-        
+
+        #pragma omp parallel for
+        for (int i = 0; i < n; i++) {
+            r[i].s = a[i];
+            r[i].v = r[i].c = 0;
+
+            for (const char *p = a[i]; *p; p++)
+                isalpha((unsigned char)*p)
+                    ? V(p) ? r[i].v++ : r[i].c++
+                    : 0;
+        }
+
         double end = omp_get_wtime();
         double time_spent = end - start;
 
-        // Mostrar resultados (usando tu lógica original de punteros para n pequeños)
+        // Mostrar resultados con el mismo formato del secuencial
         if (n <= 100) {
             printf("out = [\n");
-            for(R *o=r; o < r+n; o++) {
+
+            for (int i = 0; i < n; i++)
                 printf("  [\"%s\", %d, %d]%s\n",
-                       o->s, o->v, o->c, o < r+(n-1) ? "," : "");
-            }
+                       r[i].s, r[i].v, r[i].c,
+                       (i < n - 1) ? "," : "");
+
             printf("]\n");
         } else {
-            // Para datos grandes mostramos un resumen
             printf("Procesamiento completado. Resumen:\n");
-            printf("  Primera -> [\"%s\", V:%d, C:%d]\n", r[0].s, r[0].v, r[0].c);
-            printf("  Ultima  -> [\"%s\", V:%d, C:%d]\n", r[n-1].s, r[n-1].v, r[n-1].c);
+            printf("  Primera -> [\"%s\", V:%d, C:%d]\n",
+                   r[0].s, r[0].v, r[0].c);
+            printf("  Ultima  -> [\"%s\", V:%d, C:%d]\n",
+                   r[n - 1].s, r[n - 1].v, r[n - 1].c);
         }
-        
-        printf("Tiempo paralelo (Bits + Ternario): %f segundos\n", time_spent);
+
+        printf("Tiempo paralelo: %f segundos\n", time_spent);
 
         // Liberar memoria
         liberar_cadenas(a, n);
